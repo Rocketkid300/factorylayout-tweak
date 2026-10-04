@@ -1,0 +1,9 @@
+Package: com.factorylayout.tweak
+Name: FactoryLayout
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: Restore the Home Screen to the factory default layout from Settings.
+Maintainer: FactoryLayout
+Author: FactoryLayout
+Section: Tweaks
+Depends: mobilesubstrate, preferenceloader, firmware (>= 15.0)

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>title</key>
+	<string>FactoryLayout</string>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Home Screen</string>
+			<key>footerText</key>
+			<string>Turning this ON applies the factory layout once and enables the automatic checks after each respring. OFF only disables those automatic checks. Reset Now always works.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Enable Factory Default Layout</string>
+			<key>key</key>
+			<string>enabled</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Reset Now</string>
+			<key>action</key>
+			<string>resetNow</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Missing System Apps</string>
+			<key>footerText</key>
+			<string>iOS cannot install apps silently, so missing removable apps are offered as App Store links. New icons are appended at the end; run Reset Now again to settle the order.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Notify about missing system apps</string>
+			<key>key</key>
+			<string>notifyMissing</string>
+			<key>default</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Check Missing Now</string>
+			<key>action</key>
+			<string>checkMissing</string>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Nothing to do at install time. Respring (sbreload) afterwards so SpringBoard loads
+# the tweak and PreferenceLoader shows the FactoryLayout pane.
+echo "FactoryLayout installed - respring to activate."
+exit 0
