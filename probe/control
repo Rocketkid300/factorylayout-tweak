@@ -1,0 +1,9 @@
+Package: com.factorylayout.probe
+Name: FLProbe
+Version: 0.0.1
+Architecture: iphoneos-arm64
+Description: Diagnostic probe for FactoryLayout tweak injection. Remove after testing.
+Maintainer: FactoryLayout
+Author: FactoryLayout
+Section: Tweaks
+Depends: mobilesubstrate, firmware (>= 15.0)
