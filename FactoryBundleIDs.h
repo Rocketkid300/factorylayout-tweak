@@ -49,4 +49,11 @@ static const char *const kFLAliases[][2] = {
 };
 #define FL_ALIAS_COUNT (sizeof(kFLAliases) / sizeof(kFLAliases[0]))
 
+// Seed selection (DefaultIconState*.plist in SpringBoard.app): screen-size file first, then
+// hw.model, then these tokens, then any generic file without a size suffix.
+#define FL_SEED_SIZE_FORMAT "-%dw-%dh"          // -> "-414w-736h" from the logical screen
+#define FL_SEED_SIZE_REGEX  "-[0-9]+w-[0-9]+h"  // marks a size-specific file
+static const char *const kFLSeedModelTokens[] = { "D111AP", "N69AP" };
+#define FL_SEED_MODEL_COUNT (sizeof(kFLSeedModelTokens) / sizeof(kFLSeedModelTokens[0]))
+
 #endif

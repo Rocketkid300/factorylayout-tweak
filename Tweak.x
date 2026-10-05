@@ -199,17 +199,32 @@ static BOOL FLSeedFromSystemDefault(void) {
 		[usable addObject:f];
 	}
 
+	// 1) screen-size file (e.g. DefaultIconState-414w-736h.plist on a 5.5" 7 Plus), 2) model
+	// token, 3) generic file without a size suffix, 4) first sorted. Size comes from the
+	// logical screen in points, so Display Zoom (375w-667h) picks its own matching file.
 	NSString *model = FLHardwareModel();
-	NSMutableArray<NSString *> *tokens = [NSMutableArray array];
-	if (model.length) [tokens addObject:model];
-	[tokens addObjectsFromArray:@[@"D111AP", @"N69AP"]];
+	CGRect sb = [UIScreen mainScreen].bounds;
+	NSString *sizeToken = [NSString stringWithFormat:@FL_SEED_SIZE_FORMAT,
+		(int)lround(MIN(sb.size.width, sb.size.height)), (int)lround(MAX(sb.size.width, sb.size.height))];
 	NSString *pick = nil;
-	for (NSString *t in tokens) {
-		for (NSString *f in usable) if ([f.lowercaseString containsString:t.lowercaseString]) { pick = f; break; }
-		if (pick) break;
+	const char *why = "none";
+	for (NSString *f in usable) if ([f containsString:sizeToken]) { pick = f; why = "screen size"; break; }
+	if (!pick) {
+		NSMutableArray<NSString *> *tokens = [NSMutableArray array];
+		if (model.length) [tokens addObject:model];
+		for (size_t i = 0; i < FL_SEED_MODEL_COUNT; i++) [tokens addObject:[NSString stringWithUTF8String:kFLSeedModelTokens[i]]];
+		for (NSString *t in tokens) {
+			for (NSString *f in usable) if ([f.lowercaseString containsString:t.lowercaseString]) { pick = f; why = "model token"; break; }
+			if (pick) break;
+		}
 	}
-	if (!pick) pick = usable.firstObject;
-	FLLog(@"hw.model=%@ DefaultIconState candidates=%@ usable=%@ chosen=%@", model, all, usable, pick ?: @"(none)");
+	if (!pick) {
+		for (NSString *f in usable)
+			if ([f rangeOfString:@FL_SEED_SIZE_REGEX options:NSRegularExpressionSearch].location == NSNotFound) { pick = f; why = "generic file"; break; }
+	}
+	if (!pick) { pick = usable.firstObject; why = pick ? "first sorted" : "none"; }
+	FLLog(@"hw.model=%@ screen=%.0fx%.0fpt sizeToken=%@ DefaultIconState candidates=%@ usable=%@ chosen=%@ (%s)",
+		model, sb.size.width, sb.size.height, sizeToken, all, usable, pick ?: @"(none)", why);
 	if (!pick) { FLLog(@"no usable DefaultIconState*.plist, delete-only"); return NO; }
 
 	NSString *dir = nil;
@@ -447,6 +462,7 @@ static void FLOnLaunch(void) {
 }
 
 static void FLPrefsChanged(CFNotificationCenterRef c, void *o, CFStringRef n, const void *obj, CFDictionaryRef u) {
+	FLLog(@"notification: %@", n);
 	dispatch_async(dispatch_get_main_queue(), ^{
 		BOOL now = FLBoolPref(CFSTR("enabled"), NO);
 		BOOL was = gLastEnabled;
@@ -456,10 +472,12 @@ static void FLPrefsChanged(CFNotificationCenterRef c, void *o, CFStringRef n, co
 }
 
 static void FLResetNow(CFNotificationCenterRef c, void *o, CFStringRef n, const void *obj, CFDictionaryRef u) {
+	FLLog(@"notification: %@", n);
 	dispatch_async(dispatch_get_main_queue(), ^{ FLApplyFactoryLayout("reset now"); });
 }
 
 static void FLCheckNow(CFNotificationCenterRef c, void *o, CFStringRef n, const void *obj, CFDictionaryRef u) {
+	FLLog(@"notification: %@", n);
 	dispatch_async(dispatch_get_main_queue(), ^{ FLCheckMissingApps(YES); });
 }
 
@@ -472,9 +490,10 @@ static void FLScheduleIconAdded(void) {
 	});
 }
 
-static void FLHandleLaunchOnce(void) {
+static void FLHandleLaunchOnce(const char *trigger) {
 	if (gLaunchHandled) return;
 	gLaunchHandled = YES;
+	FLLog(@"launch handling triggered by %s", trigger);
 	// let the home screen finish loading before touching UI or the icon files
 	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
 		@try { FLOnLaunch(); } @catch (NSException *e) { FLLog(@"launch handler exception: %@", e); }
@@ -487,7 +506,17 @@ static void FLHandleLaunchOnce(void) {
 %hook SpringBoard
 - (void)applicationDidFinishLaunching:(id)application {
 	%orig;
-	FLHandleLaunchOnce();
+	FLHandleLaunchOnce("applicationDidFinishLaunching:");
+}
+%end
+%end
+
+%group LaunchOptionsHook
+%hook SpringBoard
+- (BOOL)application:(id)application didFinishLaunchingWithOptions:(id)options {
+	BOOL r = %orig;
+	FLHandleLaunchOnce("application:didFinishLaunchingWithOptions:");
+	return r;
 }
 %end
 %end
@@ -501,9 +530,20 @@ static void FLHandleLaunchOnce(void) {
 %end
 %end
 
+// The bundle identifier can still be nil this early in process start-up, so the process
+// name is accepted too (the injection filter already limits us to SpringBoard).
+static BOOL FLIsSpringBoard(NSString *bundleID) {
+	if ([bundleID isEqualToString:@"com.apple.springboard"]) return YES;
+	const char *name = getprogname();
+	return name && strcmp(name, "SpringBoard") == 0;
+}
+
 %ctor {
 	@autoreleasepool {
-		if (![[[NSBundle mainBundle] bundleIdentifier] isEqualToString:@"com.apple.springboard"]) return;
+		NSString *bid = [[NSBundle mainBundle] bundleIdentifier];
+		FLLog(@"ctor entered: pid=%d progname=%s bundleID=%@ bundlePath=%@",
+			(int)getpid(), getprogname() ?: "?", bid, [[NSBundle mainBundle] bundlePath]);
+		if (!FLIsSpringBoard(bid)) { FLLog(@"not SpringBoard, staying idle"); return; }
 		FLLog(@"loaded in SpringBoard, hw.model=%@", FLHardwareModel());
 
 		gLastEnabled = FLBoolPref(CFSTR("enabled"), NO);
@@ -512,13 +552,27 @@ static void FLHandleLaunchOnce(void) {
 		CFNotificationCenterAddObserver(d, NULL, FLResetNow, FL_NOTE_RESET, NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
 		CFNotificationCenterAddObserver(d, NULL, FLCheckNow, FL_NOTE_CHECK, NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
 
+		int launchHooks = 0;
 		Class sb = objc_getClass("SpringBoard");
 		if (sb && [sb instancesRespondToSelector:@selector(applicationDidFinishLaunching:)]) {
 			%init(LaunchHook);
+			launchHooks++;
 		} else {
-			FLLog(@"SpringBoard launch hook unavailable, scheduling launch check directly");
-			dispatch_async(dispatch_get_main_queue(), ^{ FLHandleLaunchOnce(); });
+			FLLog(@"SpringBoard applicationDidFinishLaunching: not found");
 		}
+		if (sb && [sb instancesRespondToSelector:NSSelectorFromString(@"application:didFinishLaunchingWithOptions:")]) {
+			%init(LaunchOptionsHook);
+			launchHooks++;
+		} else {
+			FLLog(@"SpringBoard application:didFinishLaunchingWithOptions: not found");
+		}
+		FLLog(@"launch hooks installed: %d", launchHooks);
+
+		// Safety net: if no hook exists, or none ever fires, start the launch handling directly.
+		dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((launchHooks ? 30 : 10) * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+			if (!gLaunchHandled) FLLog(@"no launch hook fired, running delayed fallback");
+			FLHandleLaunchOnce("delayed fallback");
+		});
 
 		Class model = objc_getClass("SBIconModel");
 		if (model && [model instancesRespondToSelector:NSSelectorFromString(@"addIcon:")]) {
